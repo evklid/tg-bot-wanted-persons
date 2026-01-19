@@ -1,0 +1,9 @@
+# Приховуємо конфіденційні дані
+config.py
+*.pyc
+__pycache__/
+.env
+
+# Системні файли
+.DS_Store
+Thumbs.db
