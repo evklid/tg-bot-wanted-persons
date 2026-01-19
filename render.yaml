@@ -1,0 +1,9 @@
+services:
+  - type: worker
+    name: telegram-bot-wanted-persons
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: python telegram_bot.py
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.0
