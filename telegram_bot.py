@@ -71,7 +71,7 @@ async def start_check(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     await query.edit_message_text(
         "📝 Введіть <b>ім'я</b> особи для перевірки:\n\n"
-        "Приклад: Олександр\n\n"
+        "Приклад: Іван\n\n"
         "Або /cancel для скасування",
         parse_mode='HTML'
     )
@@ -132,7 +132,7 @@ async def get_first_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         f"✅ Ім'я: {context.user_data['first_name']}\n\n"
         "📝 Тепер введіть <b>прізвище</b>:\n\n"
-        "Приклад: Кліновський\n\n"
+        "Приклад: Петров\n\n"
         "Або /cancel для скасування",
         parse_mode='HTML'
     )
@@ -148,7 +148,7 @@ async def get_last_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"✅ Ім'я: {context.user_data['first_name']}\n"
         f"✅ Прізвище: {context.user_data['last_name']}\n\n"
         "📝 Тепер введіть <b>по-батькові</b>:\n\n"
-        "Приклад: Олександрович\n\n"
+        "Приклад: Васильович\n\n"
         "Або /cancel для скасування",
         parse_mode='HTML'
     )
@@ -166,7 +166,7 @@ async def get_patronymic(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"✅ По-батькові: {context.user_data['patronymic']}\n\n"
         "📝 Тепер введіть <b>дату народження</b>:\n\n"
         "Формат: ДД.ММ.РРРР\n"
-        "Приклад: 05.02.1991\n\n"
+        "Приклад: 01.02.1980\n\n"
         "Або /cancel для скасування",
         parse_mode='HTML'
     )
@@ -327,7 +327,7 @@ async def perform_search(update: Update, context: ContextTypes.DEFAULT_TYPE, use
     
     try:
         # Завантаження JSON
-        loading_msg = await update.message.reply_text("⏳ Завантажую дані з бази МВС...\nЗачекайте, це може зайняти деякий час (файл ~57 MB)")
+        loading_msg = await update.message.reply_text("⏳ Завантажую дані з бази МВС...\nЗачекайте, це може зайняти деякий час")
         
         response = requests.get(JSON_URL, timeout=120)
         response.raise_for_status()
@@ -367,7 +367,7 @@ async def perform_search(update: Update, context: ContextTypes.DEFAULT_TYPE, use
         # Формування відповіді
         if found:
             result_message = (
-                f"🚨 <b>ОСОБУ ЗНАЙДЕНО В БАЗІ РОЗШУКУВАНИХ!</b>\n\n"
+                f"🚨 <b>ВАС РОЗШУКУЮТЬ!</b>\n\n"
                 f"📋 Дані:\n"
                 f"• Ім'я: {matching_record.get('FIRST_NAME') or matching_record.get('OVD', 'N/A')}\n"
                 f"• Прізвище: {matching_record.get('LAST_NAME') or matching_record.get('OVDSURNAME', 'N/A')}\n"
@@ -385,7 +385,7 @@ async def perform_search(update: Update, context: ContextTypes.DEFAULT_TYPE, use
                 
         else:
             result_message = (
-                f"✅ <b>Особу НЕ знайдено в базі розшукуваних</b>\n\n"
+                f"✅ <b>МОЖНА ЖИТИ СПОКІЙНО</b>\n\n"
                 f"Перевірено за параметрами:\n"
                 f"• Ім'я: {search_params['first_name']}\n"
                 f"• Прізвище: {search_params['last_name']}\n"
