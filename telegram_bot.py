@@ -336,7 +336,7 @@ async def perform_search(update: Update, context: ContextTypes.DEFAULT_TYPE, use
     
     try:
         # Завантаження JSON
-        loading_msg = await update.message.reply_text("⏳ Завантажую дані з бази МВС...\nЗачекайте, це може зайняти деякий час (файл ~57 MB)")
+        loading_msg = await update.message.reply_text("⏳ Завантажую дані з бази МВС...\nЗачекайте, це може зайняти деякий час (файл величезний 🥴)")
         
         response = requests.get(JSON_URL, timeout=120)
         response.raise_for_status()
