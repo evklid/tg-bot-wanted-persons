@@ -6,11 +6,20 @@ Telegram бот для перевірки наявності особи в ба�
 
 import requests
 import json
+import os
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, ReplyKeyboardRemove
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters, ContextTypes, ConversationHandler
 
 # Конфігурація
-BOT_TOKEN = "1621927044:AAGe37-RmJFX_mtcIiRZvWWIR1i-O_acr3Y"
+# Спочатку пробуємо взяти токен зі змінної оточення (для Render/Railway)
+# Якщо немає - беремо з config.py (для локального запуску)
+try:
+    from config import BOT_TOKEN
+except ImportError:
+    BOT_TOKEN = os.getenv('BOT_TOKEN')
+    if not BOT_TOKEN:
+        raise ValueError("⚠️ Токен бота не знайдено! Створіть файл config.py або встановіть змінну оточення BOT_TOKEN")
+
 JSON_URL = "https://data.gov.ua/dataset/59ecf2ab-47a1-4fae-a63c-fe5007d68130/resource/9694e34c-92a5-4839-91df-c32850db7ba9/download/mvswantedperson_1.json"
 
 # Стани для ConversationHandler
@@ -71,7 +80,7 @@ async def start_check(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     await query.edit_message_text(
         "📝 Введіть <b>ім'я</b> особи для перевірки:\n\n"
-        "Приклад: Іван\n\n"
+        "Приклад: Павло\n\n"
         "Або /cancel для скасування",
         parse_mode='HTML'
     )
@@ -132,7 +141,7 @@ async def get_first_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         f"✅ Ім'я: {context.user_data['first_name']}\n\n"
         "📝 Тепер введіть <b>прізвище</b>:\n\n"
-        "Приклад: Петров\n\n"
+        "Приклад: Насоненко\n\n"
         "Або /cancel для скасування",
         parse_mode='HTML'
     )
@@ -148,7 +157,7 @@ async def get_last_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"✅ Ім'я: {context.user_data['first_name']}\n"
         f"✅ Прізвище: {context.user_data['last_name']}\n\n"
         "📝 Тепер введіть <b>по-батькові</b>:\n\n"
-        "Приклад: Васильович\n\n"
+        "Приклад: Романович\n\n"
         "Або /cancel для скасування",
         parse_mode='HTML'
     )
@@ -327,7 +336,7 @@ async def perform_search(update: Update, context: ContextTypes.DEFAULT_TYPE, use
     
     try:
         # Завантаження JSON
-        loading_msg = await update.message.reply_text("⏳ Завантажую дані з бази МВС...\nЗачекайте, це може зайняти деякий час")
+        loading_msg = await update.message.reply_text("⏳ Завантажую дані з бази МВС...\nЗачекайте, це може зайняти деякий час (файл ~57 MB)")
         
         response = requests.get(JSON_URL, timeout=120)
         response.raise_for_status()
@@ -344,20 +353,46 @@ async def perform_search(update: Update, context: ContextTypes.DEFAULT_TYPE, use
         records = data if isinstance(data, list) else data.get('persons', [])
         
         for record in records:
-            # Перевіряємо різні можливі назви полів (case-insensitive)
-            first_name = record.get('FIRST_NAME') or record.get('first_name') or record.get('OVD') or ''
-            last_name = record.get('LAST_NAME') or record.get('last_name') or record.get('OVDSURNAME') or ''
-            patronymic = record.get('PATRONYMIC') or record.get('patronymic') or record.get('OVDPATRONYMIC') or ''
-            birth_date = record.get('BIRTH_DATE') or record.get('birth_date') or record.get('BIRTHDAY') or ''
+            # Отримуємо поля (перевіряємо різні варіанти назв)
+            # Українська версія полів (з підкресленням _U)
+            first_name = record.get('FIRST_NAME_U') or record.get('FIRST_NAME') or record.get('OVD') or ''
+            last_name = record.get('LAST_NAME_U') or record.get('LAST_NAME') or record.get('OVDSURNAME') or ''
+            patronymic = record.get('MIDDLE_NAME_U') or record.get('PATRONYMIC') or record.get('OVDPATRONYMIC') or ''
+            birth_date_raw = record.get('BIRTH_DATE') or record.get('BIRTHDAY') or ''
             
-            # Нормалізація дати (видаляємо зайві символи)
-            birth_date_normalized = birth_date.strip()
+            # Обробка дати народження
+            # Формат у JSON: "1991-04-30T00:00:00" або "1978-12-26T00:00:00"
+            # Формат вводу користувача: "30.04.1991"
+            birth_date_normalized = ""
+            if birth_date_raw:
+                # Витягуємо тільки дату (без часу)
+                if 'T' in birth_date_raw:
+                    birth_date_parts = birth_date_raw.split('T')[0]  # "1991-04-30"
+                    # Конвертуємо в формат ДД.ММ.РРРР
+                    try:
+                        year, month, day = birth_date_parts.split('-')
+                        birth_date_normalized = f"{day}.{month}.{year}"  # "30.04.1991"
+                    except:
+                        birth_date_normalized = birth_date_raw
+                else:
+                    birth_date_normalized = birth_date_raw
+            
+            # Нормалізація пошукових даних
             search_date_normalized = search_params["birth_date"].strip()
             
+            # Нормалізація тексту (прибираємо зайві пробіли, нормалізуємо апострофи)
+            def normalize_text(text):
+                """Нормалізує текст: прибирає пробіли, приводить до lower case, нормалізує апострофи"""
+                if not text:
+                    return ""
+                # Замінюємо різні види апострофів на стандартний
+                text = text.replace("'", "'").replace("`", "'").replace("ʼ", "'")
+                return text.strip().lower()
+            
             # Перевірка повного збігу всіх 4 параметрів
-            if (first_name.strip().lower() == search_params["first_name"].lower() and
-                last_name.strip().lower() == search_params["last_name"].lower() and
-                patronymic.strip().lower() == search_params["patronymic"].lower() and
+            if (normalize_text(first_name) == normalize_text(search_params["first_name"]) and
+                normalize_text(last_name) == normalize_text(search_params["last_name"]) and
+                normalize_text(patronymic) == normalize_text(search_params["patronymic"]) and
                 birth_date_normalized == search_date_normalized):
                 
                 found = True
@@ -367,12 +402,12 @@ async def perform_search(update: Update, context: ContextTypes.DEFAULT_TYPE, use
         # Формування відповіді
         if found:
             result_message = (
-                f"🚨 <b>ВАС РОЗШУКУЮТЬ!</b>\n\n"
+                f"🚨 <b>Опа, ви у розшуку</b>\n\n"
                 f"📋 Дані:\n"
-                f"• Ім'я: {matching_record.get('FIRST_NAME') or matching_record.get('OVD', 'N/A')}\n"
-                f"• Прізвище: {matching_record.get('LAST_NAME') or matching_record.get('OVDSURNAME', 'N/A')}\n"
-                f"• По-батькові: {matching_record.get('PATRONYMIC') or matching_record.get('OVDPATRONYMIC', 'N/A')}\n"
-                f"• Дата народження: {matching_record.get('BIRTH_DATE') or matching_record.get('BIRTHDAY', 'N/A')}\n"
+                f"• Ім'я: {matching_record.get('FIRST_NAME_U') or matching_record.get('OVD', 'N/A')}\n"
+                f"• Прізвище: {matching_record.get('LAST_NAME_U') or matching_record.get('OVDSURNAME', 'N/A')}\n"
+                f"• По-батькові: {matching_record.get('MIDDLE_NAME_U') or matching_record.get('OVDPATRONYMIC', 'N/A')}\n"
+                f"• Дата народження: {birth_date_normalized}\n"
             )
             
             # Додаткова інформація, якщо є
@@ -382,10 +417,12 @@ async def perform_search(update: Update, context: ContextTypes.DEFAULT_TYPE, use
                 result_message += f"• Запобіжний захід: {matching_record.get('RESTRAINT')}\n"
             if matching_record.get('ARTICLE_CRIM'):
                 result_message += f"• Стаття: {matching_record.get('ARTICLE_CRIM')}\n"
+            if matching_record.get('OVD'):
+                result_message += f"• Орган: {matching_record.get('OVD')}\n"
                 
         else:
             result_message = (
-                f"✅ <b>МОЖНА ЖИТИ СПОКІЙНО</b>\n\n"
+                f"✅ <b>Все добре, живемо далі!</b>\n\n"
                 f"Перевірено за параметрами:\n"
                 f"• Ім'я: {search_params['first_name']}\n"
                 f"• Прізвище: {search_params['last_name']}\n"
