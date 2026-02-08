@@ -10,9 +10,6 @@ import os
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, ReplyKeyboardRemove
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters, ContextTypes, ConversationHandler
 
-# Конфігурація
-# Спочатку пробуємо взяти токен зі змінної оточення (для Render/Railway)
-# Якщо немає - беремо з config.py (для локального запуску)
 try:
     from config import BOT_TOKEN
 except ImportError:
@@ -22,18 +19,15 @@ except ImportError:
 
 JSON_URL = "https://data.gov.ua/dataset/59ecf2ab-47a1-4fae-a63c-fe5007d68130/resource/9694e34c-92a5-4839-91df-c32850db7ba9/download/mvswantedperson_1.json"
 
-# Стани для ConversationHandler
 FIRST_NAME, LAST_NAME, PATRONYMIC, BIRTH_DATE, SAVE_CHOICE = range(5)
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обробник команди /start"""
     
-    # Перевіряємо чи є збережені дані
     saved_data = context.user_data.get('saved_params')
     
     if saved_data:
-        # Якщо є збережені дані - показуємо їх та даємо вибір
         keyboard = [
             [InlineKeyboardButton("🔍 Пошук за збереженими даними", callback_data='search_saved')],
             [InlineKeyboardButton("✏️ Змінити параметри пошуку", callback_data='start_check')]
@@ -52,7 +46,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             parse_mode='HTML'
         )
     else:
-        # Якщо немає збережених даних - звичайний старт
+        
         keyboard = [
             [InlineKeyboardButton("🔍 Почати перевірку", callback_data='start_check')]
         ]
@@ -102,7 +96,7 @@ async def search_saved(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return ConversationHandler.END
     
-    # Копіюємо збережені дані в поточну сесію
+   
     context.user_data['first_name'] = saved_data['first_name']
     context.user_data['last_name'] = saved_data['last_name']
     context.user_data['patronymic'] = saved_data['patronymic']
@@ -118,8 +112,7 @@ async def search_saved(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode='HTML'
     )
     
-    # Виконуємо пошук (імітуємо message для perform_search)
-    # Створюємо фейковий об'єкт update з message
+ 
     class FakeMessage:
         async def reply_text(self, text, **kwargs):
             return await query.message.reply_text(text, **kwargs)
@@ -187,7 +180,7 @@ async def get_birth_date(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Отримання дати народження та запит про збереження"""
     context.user_data['birth_date'] = update.message.text.strip()
     
-    # Показуємо зібрані дані та питаємо про збереження
+    
     keyboard = [
         [InlineKeyboardButton("💾 Так, зберегти", callback_data='save_yes')],
         [InlineKeyboardButton("❌ Ні, не зберігати", callback_data='save_no')]
@@ -430,11 +423,11 @@ async def perform_search(update: Update, context: ContextTypes.DEFAULT_TYPE, use
                 f"• Дата народження: {search_params['birth_date']}\n"
             )
         
-        # Вибираємо кнопки залежно від того, чи є збережені дані
+       
         saved_data = context.user_data.get('saved_params')
         
         if saved_data:
-            # Якщо є збережені дані - показуємо кнопки пошуку знову та зміни параметрів
+           
             keyboard = [
                 [InlineKeyboardButton("🔄 Пошук знову", callback_data='search_saved')],
                 [InlineKeyboardButton("✏️ Змінити параметри", callback_data='start_check')],
@@ -484,7 +477,7 @@ def main():
     # Створення додатку
     application = Application.builder().token(BOT_TOKEN).build()
     
-    # ConversationHandler для послідовного введення даних
+   
     conv_handler = ConversationHandler(
         entry_points=[
             CallbackQueryHandler(start_check, pattern='start_check')
@@ -502,7 +495,7 @@ def main():
         fallbacks=[CommandHandler('cancel', cancel)],
     )
     
-    # Додавання обробників
+  
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CallbackQueryHandler(search_saved, pattern='search_saved'))
     application.add_handler(CallbackQueryHandler(main_menu, pattern='main_menu'))
