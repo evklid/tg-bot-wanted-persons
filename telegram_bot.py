@@ -1,7 +1,6 @@
 import requests
 import json
 import os
-import asyncio
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardRemove
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters, ContextTypes, ConversationHandler
 
@@ -22,92 +21,75 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     if saved_data:
         keyboard = [
-            [InlineKeyboardButton("🔍 Пошук за збереженими даними", callback_data='search_saved')],
-            [InlineKeyboardButton("✏️ Змінити параметри пошуку", callback_data='start_check')]
+            [InlineKeyboardButton("🔍 Пошук за збереженими", callback_data='search_saved')],
+            [InlineKeyboardButton("✏️ Змінити дані", callback_data='start_check')]
         ]
-        text = (f'👋 Вітаю!\n\n💾 <b>У вас є збережені параметри:</b>\n\n'
-                f'• Ім\'я: {saved_data["first_name"]}\n'
-                f'• Прізвище: {saved_data["last_name"]}\n'
-                f'• По-батькові: {saved_data["patronymic"]}\n'
-                f'• Дата народження: {saved_data["birth_date"]}\n\n'
-                'Виберіть дію:')
-        await target.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='HTML')
+        text = f"💾 Збережено: {saved_data['last_name']} {saved_data['first_name']}"
+        await target.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard))
     else:
-        keyboard = [[InlineKeyboardButton("🔍 Почати перевірку", callback_data='start_check')]]
-        await target.reply_text('👋 Вітаю!\n\nЦей бот перевіряє розшук МВС.\nНатисніть кнопку:', 
-                                reply_markup=InlineKeyboardMarkup(keyboard))
+        keyboard = [[InlineKeyboardButton("🔍 Почати", callback_data='start_check')]]
+        await target.reply_text('👋 Вітаю! Натисніть кнопку для пошуку:', reply_markup=InlineKeyboardMarkup(keyboard))
     return ConversationHandler.END
 
 async def start_check(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    await query.edit_message_text("📝 Введіть <b>ім'я</b> особи:", parse_mode='HTML')
+    await update.callback_query.answer()
+    await update.callback_query.edit_message_text("📝 Введіть ім'я:")
     return FIRST_NAME
 
 async def get_first_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data['first_name'] = update.message.text.strip()
-    await update.message.reply_text("✅ Введіть <b>прізвище</b>:", parse_mode='HTML')
+    await update.message.reply_text("✅ Введіть прізвище:")
     return LAST_NAME
 
 async def get_last_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data['last_name'] = update.message.text.strip()
-    await update.message.reply_text("✅ Введіть <b>по-батькові</b>:", parse_mode='HTML')
+    await update.message.reply_text("✅ Введіть по-батькові:")
     return PATRONYMIC
 
 async def get_patronymic(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data['patronymic'] = update.message.text.strip()
-    await update.message.reply_text("✅ Введіть <b>дату народження</b> (ДД.ММ.РРРР):", parse_mode='HTML')
+    await update.message.reply_text("✅ Введіть дату народження (ДД.ММ.РРРР):")
     return BIRTH_DATE
 
 async def get_birth_date(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data['birth_date'] = update.message.text.strip()
-    keyboard = [[InlineKeyboardButton("💾 Так", callback_data='save_yes'), 
-                 InlineKeyboardButton("❌ Ні", callback_data='save_no')]]
-    await update.message.reply_text("💾 Зберегти дані для майбутніх пошуків?", 
-                                    reply_markup=InlineKeyboardMarkup(keyboard))
+    keyboard = [[InlineKeyboardButton("💾 Так", callback_data='save_yes'), InlineKeyboardButton("❌ Ні", callback_data='save_no')]]
+    await update.message.reply_text("💾 Зберегти дані?", reply_markup=InlineKeyboardMarkup(keyboard))
     return SAVE_CHOICE
 
 async def perform_search_logic(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    msg = update.callback_query.message
-    search_params = {
-        "f": context.user_data.get('first_name', ''),
-        "l": context.user_data.get('last_name', ''),
-        "p": context.user_data.get('patronymic', ''),
-        "b": context.user_data.get('birth_date', '')
-    }
-    
-    status_msg = await msg.reply_text("⏳ Завантаження та пошук (це може зайняти до хвилини)...")
+    query = update.callback_query
+    msg = await query.message.reply_text("⏳ Пошук у базі МВС (зачекайте)...")
     
     try:
-        loop = asyncio.get_event_loop()
-        response = await loop.run_in_executor(None, lambda: requests.get(JSON_URL, timeout=60))
+        # Виконуємо запит синхронно для стабільності на Render
+        response = requests.get(JSON_URL, timeout=60)
         data = response.json()
         records = data if isinstance(data, list) else data.get('persons', [])
         
-        found = None
-        norm = lambda t: str(t).strip().lower().replace("ʼ", "'") if t else ""
-        
-        target_f, target_l, target_p, target_b = norm(search_params["f"]), norm(search_params["l"]), norm(search_params["p"]), search_params["b"]
+        target_f = context.user_data.get('first_name', '').lower()
+        target_l = context.user_data.get('last_name', '').lower()
+        target_b = context.user_data.get('birth_date', '')
 
+        found = None
         for r in records:
-            rf = norm(r.get('FIRST_NAME_U') or r.get('FIRST_NAME'))
-            rl = norm(r.get('LAST_NAME_U') or r.get('LAST_NAME'))
-            rp = norm(r.get('MIDDLE_NAME_U') or r.get('PATRONYMIC'))
+            rf = (r.get('FIRST_NAME_U') or r.get('FIRST_NAME') or '').lower()
+            rl = (r.get('LAST_NAME_U') or r.get('LAST_NAME') or '').lower()
+            
             rb_raw = r.get('BIRTH_DATE') or r.get('BIRTHDAY') or ''
             rb = ""
-            if rb_raw and 'T' in rb_raw:
+            if 'T' in rb_raw:
                 p = rb_raw.split('T')[0].split('-')
                 if len(p) == 3: rb = f"{p[2]}.{p[1]}.{p[0]}"
 
-            if rf == target_f and rl == target_l and rp == target_p and rb == target_b:
+            if rf == target_f and rl == target_l and rb == target_b:
                 found = r
                 break
 
-        res = f"🚨 <b>Знайдено!</b>\nСтаття: {found.get('ARTICLE_CRIM')}" if found else "✅ <b>Не знайдено.</b>"
-        await status_msg.edit_text(res, parse_mode='HTML', 
-                                   reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🏠 Меню", callback_data='main_menu')]]))
+        res = f"🚨 Знайдено! Стаття: {found.get('ARTICLE_CRIM')}" if found else "✅ Не знайдено."
+        await msg.edit_text(res, reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🏠 Меню", callback_data='main_menu')]]))
     except Exception as e:
-        await status_msg.edit_text(f"❌ Помилка: {str(e)}")
+        await msg.edit_text(f"❌ Помилка: {str(e)}")
 
 async def save_choice_yes(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.callback_query.answer()
@@ -115,13 +97,13 @@ async def save_choice_yes(update: Update, context: ContextTypes.DEFAULT_TYPE):
         'first_name': context.user_data['first_name'], 'last_name': context.user_data['last_name'],
         'patronymic': context.user_data['patronymic'], 'birth_date': context.user_data['birth_date']
     }
-    await update.callback_query.edit_message_text("💾 Збережено!")
+    await update.callback_query.edit_message_text("✅ Збережено!")
     await perform_search_logic(update, context)
     return ConversationHandler.END
 
 async def save_choice_no(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.callback_query.answer()
-    await update.callback_query.edit_message_text("⏳ Пошук без збереження...")
+    await update.callback_query.edit_message_text("⏳ Пошук...")
     await perform_search_logic(update, context)
     return ConversationHandler.END
 
@@ -134,7 +116,7 @@ async def search_saved(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return ConversationHandler.END
 
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text('❌ Скасовано.', reply_markup=ReplyKeyboardRemove())
+    await update.message.reply_text('❌ Скасовано.')
     return ConversationHandler.END
 
 def main():
@@ -150,10 +132,7 @@ def main():
             SAVE_CHOICE: [CallbackQueryHandler(save_choice_yes, pattern='save_yes'),
                           CallbackQueryHandler(save_choice_no, pattern='save_no')],
         },
-        fallbacks=[CommandHandler('cancel', cancel)],
-        per_chat=True,
-        per_user=True,
-        per_message=False
+        fallbacks=[CommandHandler('cancel', cancel)]
     )
     
     app.add_handler(CommandHandler("start", start))
