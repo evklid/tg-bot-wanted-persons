@@ -493,6 +493,7 @@ def main():
             ],
         },
         fallbacks=[CommandHandler('cancel', cancel)],
+        per_message=True,
     )
     
   
