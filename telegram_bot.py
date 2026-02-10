@@ -7,6 +7,7 @@ Telegram бот для перевірки наявності особи в ба�
 import requests
 import json
 import os
+import time
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, ReplyKeyboardRemove
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters, ContextTypes, ConversationHandler
 
@@ -468,7 +469,9 @@ async def perform_search(update: Update, context: ContextTypes.DEFAULT_TYPE, use
 
 def main():
     """Запуск бота"""
-    print("🤖 Запуск Telegram бота...")
+    print("⏳ Запуск бота...")
+        time.sleep(20)
+    
     print("📝 Бот готовий приймати дані від користувачів")
     print("💾 Підтримка збереження параметрів активована")
     
@@ -489,6 +492,7 @@ def main():
             ],
         },
         fallbacks=[CommandHandler('cancel', cancel)],
+        per_message=False
     )
     
     application.add_handler(CommandHandler("start", start))
