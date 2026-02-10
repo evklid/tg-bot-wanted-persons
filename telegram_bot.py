@@ -15,6 +15,11 @@ JSON_URL = "https://data.gov.ua/dataset/59ecf2ab-47a1-4fae-a63c-fe5007d68130/res
 
 FIRST_NAME, LAST_NAME, PATRONYMIC, BIRTH_DATE, SAVE_CHOICE = range(5)
 
+def normalize_text(text):
+    if not text: return ""
+    # Обробка всіх видів апострофів та приведення до нижнього регістру
+    return str(text).strip().lower().replace("`", "'").replace("ʼ", "'").replace("'", "'")
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     target = update.message if update.message else update.callback_query.message
     saved_data = context.user_data.get('saved_params')
@@ -59,37 +64,53 @@ async def get_birth_date(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def perform_search_logic(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
-    msg = await query.message.reply_text("⏳ Пошук у базі МВС (зачекайте)...")
+    msg = await query.message.reply_text("⏳ Завантаження та аналіз бази МВС...")
     
     try:
-        # Виконуємо запит синхронно для стабільності на Render
-        response = requests.get(JSON_URL, timeout=60)
+        response = requests.get(JSON_URL, timeout=90)
+        response.raise_for_status()
         data = response.json()
         records = data if isinstance(data, list) else data.get('persons', [])
         
-        target_f = context.user_data.get('first_name', '').lower()
-        target_l = context.user_data.get('last_name', '').lower()
-        target_b = context.user_data.get('birth_date', '')
+        # Параметри пошуку від користувача (нормалізовані)
+        t_f = normalize_text(context.user_data.get('first_name'))
+        t_l = normalize_text(context.user_data.get('last_name'))
+        t_p = normalize_text(context.user_data.get('patronymic'))
+        t_b = context.user_data.get('birth_date', '').strip()
 
         found = None
         for r in records:
-            rf = (r.get('FIRST_NAME_U') or r.get('FIRST_NAME') or '').lower()
-            rl = (r.get('LAST_NAME_U') or r.get('LAST_NAME') or '').lower()
+            # Дані з бази (нормалізовані)
+            rf = normalize_text(r.get('FIRST_NAME_U') or r.get('FIRST_NAME'))
+            rl = normalize_text(r.get('LAST_NAME_U') or r.get('LAST_NAME'))
+            rp = normalize_text(r.get('MIDDLE_NAME_U') or r.get('PATRONYMIC'))
             
+            # Обробка дати з формату ISO (YYYY-MM-DD...) у ДД.ММ.РРРР
             rb_raw = r.get('BIRTH_DATE') or r.get('BIRTHDAY') or ''
             rb = ""
             if 'T' in rb_raw:
-                p = rb_raw.split('T')[0].split('-')
-                if len(p) == 3: rb = f"{p[2]}.{p[1]}.{p[0]}"
+                date_part = rb_raw.split('T')[0] # Отримуємо YYYY-MM-DD
+                parts = date_part.split('-')
+                if len(parts) == 3:
+                    rb = f"{parts[2]}.{parts[1]}.{parts[0]}"
 
-            if rf == target_f and rl == target_l and rb == target_b:
+            if rf == t_f and rl == t_l and rp == t_p and rb == t_b:
                 found = r
                 break
 
-        res = f"🚨 Знайдено! Стаття: {found.get('ARTICLE_CRIM')}" if found else "✅ Не знайдено."
-        await msg.edit_text(res, reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🏠 Меню", callback_data='main_menu')]]))
+        if found:
+            res = (f"🚨 <b>ОСОБУ ЗНАЙДЕНО!</b>\n\n"
+                   f"👤 {found.get('LAST_NAME_U')} {found.get('FIRST_NAME_U')}\n"
+                   f"📅 Дата народження: {t_b}\n"
+                   f"⚖️ Стаття: {found.get('ARTICLE_CRIM', 'Не вказано')}\n"
+                   f"🛡️ Орган: {found.get('OVD', 'Не вказано')}")
+        else:
+            res = "✅ <b>Особу не знайдено</b> в базі розшуку МВС."
+            
+        await msg.edit_text(res, parse_mode='HTML', 
+                           reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🏠 Меню", callback_data='main_menu')]]))
     except Exception as e:
-        await msg.edit_text(f"❌ Помилка: {str(e)}")
+        await msg.edit_text(f"❌ Помилка при пошуку: {str(e)}")
 
 async def save_choice_yes(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.callback_query.answer()
@@ -103,7 +124,7 @@ async def save_choice_yes(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def save_choice_no(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.callback_query.answer()
-    await update.callback_query.edit_message_text("⏳ Пошук...")
+    await update.callback_query.edit_message_text("⏳ Шукаю...")
     await perform_search_logic(update, context)
     return ConversationHandler.END
 
@@ -111,12 +132,12 @@ async def search_saved(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.callback_query.answer()
     data = context.user_data.get('saved_params')
     context.user_data.update(data)
-    await update.callback_query.edit_message_text(f"🔍 Перевірка {data['last_name']}...")
+    await update.callback_query.edit_message_text(f"🔍 Перевірка для {data['last_name']}...")
     await perform_search_logic(update, context)
     return ConversationHandler.END
 
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text('❌ Скасовано.')
+    await update.message.reply_text('❌ Скасовано.', reply_markup=ReplyKeyboardRemove())
     return ConversationHandler.END
 
 def main():
@@ -140,7 +161,7 @@ def main():
     app.add_handler(CallbackQueryHandler(start, pattern='main_menu'))
     app.add_handler(conv)
     
-    print("✅ Бот запущено!")
+    print("✅ Бот активний")
     app.run_polling()
 
 if __name__ == '__main__':
