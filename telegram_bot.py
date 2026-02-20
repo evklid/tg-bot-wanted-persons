@@ -74,7 +74,7 @@ async def start_check(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     await query.edit_message_text(
         "📝 Введіть <b>прізвище</b> особи для перевірки:\n\n"
-        "Приклад: Кліновський\n\n"
+        "Приклад: Осауленко\n\n"
         "Або /cancel для скасування",
         parse_mode='HTML'
     )
@@ -135,7 +135,7 @@ async def get_first_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"✅ Прізвище: {context.user_data['last_name']}\n"
         f"✅ Ім'я: {context.user_data['first_name']}\n\n"
         "📝 Тепер введіть <b>по-батькові</b>:\n\n"
-        "Приклад: Олександрович\n\n"
+        "Приклад: Петрович\n\n"
         "Або /cancel для скасування",
         parse_mode='HTML'
     )
@@ -150,7 +150,7 @@ async def get_last_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         f"✅ Прізвище: {context.user_data['last_name']}\n\n"
         "📝 Тепер введіть <b>ім'я</b>:\n\n"
-        "Приклад: Олександр\n\n"
+        "Приклад: Микита\n\n"
         "Або /cancel для скасування",
         parse_mode='HTML'
     )
@@ -168,7 +168,7 @@ async def get_patronymic(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"✅ По-батькові: {context.user_data['patronymic']}\n\n"
         "📝 Тепер введіть <b>дату народження</b>:\n\n"
         "Формат: ДД.ММ.РРРР\n"
-        "Приклад: 05.02.1991\n\n"
+        "Приклад: 01.02.1990\n\n"
         "Або /cancel для скасування",
         parse_mode='HTML'
     )
