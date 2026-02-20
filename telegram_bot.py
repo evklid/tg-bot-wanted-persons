@@ -7,7 +7,6 @@ Telegram бот для перевірки наявності особи в ба�
 import requests
 import json
 import os
-import time
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, ReplyKeyboardRemove
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters, ContextTypes, ConversationHandler
 
@@ -38,8 +37,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(
             '👋 Вітаю!\n\n'
             '💾 <b>У вас є збережені параметри:</b>\n\n'
-            f'• Прізвище: {saved_data["last_name"]}\n'
             f'• Ім\'я: {saved_data["first_name"]}\n'
+            f'• Прізвище: {saved_data["last_name"]}\n'
             f'• По-батькові: {saved_data["patronymic"]}\n'
             f'• Дата народження: {saved_data["birth_date"]}\n\n'
             'Виберіть дію:',
@@ -57,8 +56,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             '👋 Вітаю!\n\n'
             'Цей бот перевіряє наявність особи в базі розшукуваних осіб МВС України.\n\n'
             '📝 Для перевірки вам потрібно буде ввести:\n'
-            '• Прізвище\n'
             '• Ім\'я\n'
+            '• Прізвище\n'
             '• По-батькові\n'
             '• Дату народження (формат: ДД.ММ.РРРР)\n\n'
             'Натисніть кнопку для початку:',
@@ -75,12 +74,12 @@ async def start_check(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     await query.edit_message_text(
         "📝 Введіть <b>прізвище</b> особи для перевірки:\n\n"
-        "Приклад: Костюков\n\n"
+        "Приклад: Кліновський\n\n"
         "Або /cancel для скасування",
         parse_mode='HTML'
     )
     
-    return LAST_NAME
+    return LAST_NAME  # Починаємо з прізвища
 
 
 async def search_saved(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -136,7 +135,7 @@ async def get_first_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"✅ Прізвище: {context.user_data['last_name']}\n"
         f"✅ Ім'я: {context.user_data['first_name']}\n\n"
         "📝 Тепер введіть <b>по-батькові</b>:\n\n"
-        "Приклад: Костянтинович\n\n"
+        "Приклад: Олександрович\n\n"
         "Або /cancel для скасування",
         parse_mode='HTML'
     )
@@ -151,7 +150,7 @@ async def get_last_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         f"✅ Прізвище: {context.user_data['last_name']}\n\n"
         "📝 Тепер введіть <b>ім'я</b>:\n\n"
-        "Приклад: Петро\n\n"
+        "Приклад: Олександр\n\n"
         "Або /cancel для скасування",
         parse_mode='HTML'
     )
@@ -169,7 +168,7 @@ async def get_patronymic(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"✅ По-батькові: {context.user_data['patronymic']}\n\n"
         "📝 Тепер введіть <b>дату народження</b>:\n\n"
         "Формат: ДД.ММ.РРРР\n"
-        "Приклад: 01.02.1981\n\n"
+        "Приклад: 05.02.1991\n\n"
         "Або /cancel для скасування",
         parse_mode='HTML'
     )
@@ -355,6 +354,8 @@ async def perform_search(update: Update, context: ContextTypes.DEFAULT_TYPE, use
             birth_date_raw = record.get('BIRTH_DATE') or record.get('BIRTHDAY') or ''
             
             # Обробка дати народження
+            # Формат у JSON: "1991-04-30T00:00:00" або "1978-12-26T00:00:00"
+            # Формат вводу користувача: "30.04.1991"
             birth_date_normalized = ""
             if birth_date_raw:
                 # Витягуємо тільки дату (без часу)
@@ -394,7 +395,7 @@ async def perform_search(update: Update, context: ContextTypes.DEFAULT_TYPE, use
         # Формування відповіді
         if found:
             result_message = (
-                f"🚨 <b>ОПА! ОСОБА У РОЗШУКУ</b>\n\n"
+                f"🚨 <b>ОСОБУ ЗНАЙДЕНО В БАЗІ РОЗШУКУВАНИХ!</b>\n\n"
                 f"📋 Дані:\n"
                 f"• Прізвище: {matching_record.get('LAST_NAME_U') or matching_record.get('OVDSURNAME', 'N/A')}\n"
                 f"• Ім'я: {matching_record.get('FIRST_NAME_U') or matching_record.get('OVD', 'N/A')}\n"
@@ -414,7 +415,7 @@ async def perform_search(update: Update, context: ContextTypes.DEFAULT_TYPE, use
                 
         else:
             result_message = (
-                f"✅ <b>Все добре, живемо далі!</b>\n\n"
+                f"✅ <b>Особу НЕ знайдено в базі розшукуваних</b>\n\n"
                 f"Перевірено за параметрами:\n"
                 f"• Прізвище: {search_params['last_name']}\n"
                 f"• Ім'я: {search_params['first_name']}\n"
@@ -469,14 +470,14 @@ async def perform_search(update: Update, context: ContextTypes.DEFAULT_TYPE, use
 
 def main():
     """Запуск бота"""
-    print("⏳ Запуск бота...")
-    time.sleep(20)
-    
+    print("🤖 Запуск Telegram бота...")
     print("📝 Бот готовий приймати дані від користувачів")
     print("💾 Підтримка збереження параметрів активована")
     
+    # Створення додатку
     application = Application.builder().token(BOT_TOKEN).build()
     
+    # ConversationHandler для послідовного введення даних
     conv_handler = ConversationHandler(
         entry_points=[
             CallbackQueryHandler(start_check, pattern='start_check')
@@ -492,19 +493,46 @@ def main():
             ],
         },
         fallbacks=[CommandHandler('cancel', cancel)],
-        per_message=False
+        # Видалено per_message=True для усунення warning
     )
     
+    # Додавання обробників
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CallbackQueryHandler(search_saved, pattern='search_saved'))
     application.add_handler(CallbackQueryHandler(main_menu, pattern='main_menu'))
     application.add_handler(conv_handler)
     
+    # HTTP сервер для Render (щоб не було timeout)
+    import os
+    from threading import Thread
+    from http.server import HTTPServer, BaseHTTPRequestHandler
+    
+    class HealthCheckHandler(BaseHTTPRequestHandler):
+        def do_GET(self):
+            self.send_response(200)
+            self.send_header('Content-type', 'text/plain')
+            self.end_headers()
+            self.wfile.write(b'Bot is running')
+        
+        def log_message(self, format, *args):
+            pass  # Не логувати HTTP запити
+    
+    def run_health_server():
+        port = int(os.environ.get('PORT', 10000))
+        server = HTTPServer(('0.0.0.0', port), HealthCheckHandler)
+        print(f"🌐 HTTP сервер запущено на порту {port}")
+        server.serve_forever()
+    
+    # Запуск HTTP сервера у фоновому потоці
+    health_thread = Thread(target=run_health_server, daemon=True)
+    health_thread.start()
+    
+    # Запуск бота з drop_pending_updates для уникнення конфліктів
     print("✅ Бот запущено! Натисніть Ctrl+C для зупинки.")
     print("💬 Відкрийте бота в Telegram та відправте /start")
     application.run_polling(
         allowed_updates=Update.ALL_TYPES,
-        drop_pending_updates=True 
+        drop_pending_updates=True  # Скидає старі оновлення при запуску
     )
 
 
