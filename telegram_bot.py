@@ -329,7 +329,7 @@ async def perform_search(update: Update, context: ContextTypes.DEFAULT_TYPE, use
     
     try:
         # Завантаження JSON
-        loading_msg = await update.message.reply_text("⏳ Завантажую дані з бази МВС...\nЗачекайте, це може зайняти деякий час (файл величезний 🥴)")
+        loading_msg = await update.message.reply_text("⏳ Завантажую дані з бази МВС...\nЗачекайте, це може зайняти деякий час")
         
         response = requests.get(JSON_URL, timeout=120)
         response.raise_for_status()
@@ -395,7 +395,7 @@ async def perform_search(update: Update, context: ContextTypes.DEFAULT_TYPE, use
         # Формування відповіді
         if found:
             result_message = (
-                f"🚨 <b>ОСОБУ ЗНАЙДЕНО В БАЗІ РОЗШУКУВАНИХ!</b>\n\n"
+                f"🚨 <b>ОПА! ОСОБУ ЗНАЙДЕНО В БАЗІ РОЗШУКУВАНИХ!</b>\n\n"
                 f"📋 Дані:\n"
                 f"• Прізвище: {matching_record.get('LAST_NAME_U') or matching_record.get('OVDSURNAME', 'N/A')}\n"
                 f"• Ім'я: {matching_record.get('FIRST_NAME_U') or matching_record.get('OVD', 'N/A')}\n"
@@ -415,7 +415,7 @@ async def perform_search(update: Update, context: ContextTypes.DEFAULT_TYPE, use
                 
         else:
             result_message = (
-                f"✅ <b>Особу НЕ знайдено в базі розшукуваних</b>\n\n"
+                f"✅ <b>ВСЕ ДОБРЕ, ЖИВЕМО ДАЛІ</b>\n\n"
                 f"Перевірено за параметрами:\n"
                 f"• Прізвище: {search_params['last_name']}\n"
                 f"• Ім'я: {search_params['first_name']}\n"
