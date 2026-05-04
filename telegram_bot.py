@@ -328,11 +328,43 @@ async def perform_search(update: Update, context: ContextTypes.DEFAULT_TYPE, use
     }
     
     try:
-        # Завантаження JSON
+        # Завантаження JSON з retry логікою
         loading_msg = await update.message.reply_text("⏳ Завантажую дані з бази МВС...\nЗачекайте, це може зайняти деякий час")
         
-        response = requests.get(JSON_URL, timeout=120)
-        response.raise_for_status()
+        max_retries = 3
+        retry_count = 0
+        response = None
+        
+        while retry_count < max_retries:
+            try:
+                response = requests.get(
+                    JSON_URL, 
+                    timeout=180,  # 3 хвилини
+                    stream=True,  # Потокове завантаження для великих файлів
+                    headers={'Accept-Encoding': 'gzip, deflate'}  # Стиснення
+                )
+                response.raise_for_status()
+                break  # Успішно завантажено
+            except (requests.exceptions.Timeout, requests.exceptions.ConnectionError, 
+                    requests.exceptions.ChunkedEncodingError, 
+                    requests.exceptions.IncompleteRead) as e:
+                retry_count += 1
+                if retry_count < max_retries:
+                    await loading_msg.edit_text(
+                        f"⚠️ Помилка завантаження (спроба {retry_count}/{max_retries})...\n"
+                        f"Повторюю запит через 3 секунди..."
+                    )
+                    import time
+                    time.sleep(3)  # Пауза перед повтором
+                else:
+                    # Остання спроба не вдалась
+                    raise Exception(
+                        f"Не вдалося завантажити базу після {max_retries} спроб. "
+                        f"Помилка: {str(e)}"
+                    )
+        
+        if response is None:
+            raise Exception("Не вдалося отримати відповідь від сервера")
         
         # Парсинг JSON
         await loading_msg.edit_text("⏳ Обробляю дані... Це може зайняти до 1 хвилини.")
@@ -449,10 +481,18 @@ async def perform_search(update: Update, context: ContextTypes.DEFAULT_TYPE, use
         )
         
     except requests.RequestException as e:
+        error_type = type(e).__name__
         await update.message.reply_text(
-            f"❌ Помилка при завантаженні даних:\n{str(e)}\n\n"
+            f"❌ <b>Помилка при завантаженні даних</b>\n\n"
+            f"Не вдалося підключитися до бази МВС.\n"
+            f"Це може статися через:\n"
+            f"• Тимчасові проблеми з сервером data.gov.ua\n"
+            f"• Нестабільне інтернет-з'єднання\n"
+            f"• Велике навантаження на сервер\n\n"
+            f"<i>Технічні деталі: {error_type}</i>\n\n"
             f"Спробуйте пізніше або перевірте з'єднання з інтернетом.\n\n"
-            f"Натисніть /start для нової перевірки."
+            f"Натисніть /start для нової перевірки.",
+            parse_mode='HTML'
         )
     except json.JSONDecodeError as e:
         await update.message.reply_text(
@@ -461,9 +501,14 @@ async def perform_search(update: Update, context: ContextTypes.DEFAULT_TYPE, use
             f"Натисніть /start для нової перевірки."
         )
     except Exception as e:
+        error_details = str(e)
         await update.message.reply_text(
-            f"❌ Несподівана помилка:\n{str(e)}\n\n"
-            f"Натисніть /start для нової перевірки."
+            f"❌ <b>Несподівана помилка</b>\n\n"
+            f"Щось пішло не так при обробці запиту.\n\n"
+            f"<i>Деталі: {error_details[:200]}</i>\n\n"
+            f"Спробуйте ще раз або зверніться до адміністратора.\n\n"
+            f"Натисніть /start для нової перевірки.",
+            parse_mode='HTML'
         )
 
 
